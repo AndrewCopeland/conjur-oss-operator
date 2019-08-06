@@ -8,6 +8,9 @@ source bootstrap.env
 # Add conjur service account
 oc create serviceaccount $CONJUR_SERVICEACCOUNT_NAME -n $CONJUR_NAMESPACE_NAME
 
+# Add postgres service account
+oc create serviceaccount $POSTGRES_SERVICEACCOUNT_NAME -n $CONJUR_NAMESPACE_NAME
+
 # Add docker-registry secret
 oc create secret docker-registry $SECRET_NAME --docker-server=$DOCKER_REGISTRY_PATH --docker-username=_ --docker-password=$(oc whoami -t) --docker-email=_
 
@@ -17,11 +20,17 @@ sed -e "s#{{ CONJUR_NAMESPACE_NAME }}#$CONJUR_NAMESPACE_NAME#g" ./conjur-authent
 
 # allow pods to run as root
 oc adm policy add-scc-to-user anyuid "system:serviceaccount:$CONJUR_NAMESPACE_NAME:$CONJUR_SERVICEACCOUNT_NAME"
+oc adm policy add-scc-to-user anyuid -z "$POSTGRES_SERVICEACCOUNT_NAME"
 
 # Create image pull secret
 oc policy add-role-to-user system:image-puller "system:serviceaccount:$CONJUR_NAMESPACE_NAME:$CONJUR_SERVICEACCOUNT_NAME" -n=default
 oc policy add-role-to-user system:image-puller "system:serviceaccount:$CONJUR_NAMESPACE_NAME:$CONJUR_SERVICEACCOUNT_NAME" -n=$CONJUR_NAMESPACE_NAME
 
+# create the required secrets
+oc create secret generic conjur-data-key --from-literal=CONJUR_DATA_KEY=$(openssl rand -base64 32) --namespace=$CONJUR_NAMESPACE_NAME
+postgres_password=$(openssl rand -base64 16)
+oc create secret generic conjur-database-url --from-literal=DATABASE_URL=postgres://postgres:$postgres_password@conjur-postgres/postgres --namespace=$CONJUR_NAMESPACE_NAME
+oc create secret generic postgres-admin-password --from-literal=POSTGRESQL_ADMIN_PASSWORD=$postgres_password --namespace=$CONJUR_NAMESPACE_NAME
 
 # Get image tags
 conjur_image=$(platform_image "conjur")

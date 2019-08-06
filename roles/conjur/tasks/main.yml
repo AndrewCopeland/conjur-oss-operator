@@ -1,3 +1,40 @@
+- name: create postgres persistent volume
+  k8s:
+    definition:
+      kind: PersistentVolume
+      apiVersion: v1
+      metadata:
+        name: postgres-pv-volume
+        labels:
+          type: local
+          app: conjur-postgres
+      spec:
+        capacity:
+          storage: 10Gi
+        accessModes:
+          - ReadWriteMany
+        nfs:
+          path: "{{ nfs_path }}"
+          server: "{{ nfs_address }}" # NFS server IP
+        persistentVolumeReclaimPolicy: Retain
+
+- name: create postgres persistent volume claim
+  k8s:
+    definition:
+      kind: PersistentVolumeClaim
+      apiVersion: v1
+      metadata:
+        name: postgres-pv-claim
+        labels:
+          app: conjur-postgres
+      spec:
+        accessModes:
+          - ReadWriteMany
+        resources:
+          requests:
+            storage: 2Gi
+          volumeName: postgres-pv-volume
+
 - name: create conjur postgres service
   k8s:
     definition:
@@ -15,6 +52,34 @@
           app: conjur-postgres
         type: ClusterIP
 
+
+# - name: create conjur postgres database deployment
+#   k8s:
+#     definition:
+#       apiVersion: apps/v1
+#       kind: Deployment
+#       metadata:
+#         name: conjur-postgres
+#         namespace: "{{ meta.namespace }}"
+#         labels:
+#           app: conjur-postgres
+#       spec:
+#         selector:
+#           matchLabels:
+#             app: conjur-postgres
+#             name: conjur-postgres
+#         replicas: 1
+#         template:
+#           metadata:
+#             labels:
+#               app: conjur-postgres
+#               name: conjur-postgres
+#           spec:
+#             containers:
+#             - image: "{{ postgres_image }}"
+#               imagePullPolicy: "{{ image_pull_policy }}"
+#               name: postgres
+
 - name: create conjur postgres database deployment
   k8s:
     definition:
@@ -22,7 +87,6 @@
       kind: Deployment
       metadata:
         name: conjur-postgres
-        namespace: "{{ meta.namespace }}"
         labels:
           app: conjur-postgres
       spec:
@@ -37,10 +101,31 @@
               app: conjur-postgres
               name: conjur-postgres
           spec:
+            serviceAccountName: postgres
             containers:
-            - image: "{{ postgres_image }}"
-              imagePullPolicy: "{{ image_pull_policy }}"
-              name: postgres
+            - image: centos/postgresql-10-centos7:latest
+              imagePullPolicy: "{{ IMAGE_PULL_POLICY }}"
+              name: conjur-postgres
+              ### If no persistency is needed, start commenting from here ###
+              volumeMounts:
+              - mountPath: /var/lib/pgsql/data/userdata
+                name: postgresdb
+                readOnly: false
+              securityContext:
+                runAsUser: 65534
+              ### End commenting here ##
+              env:
+              - name: POSTGRESQL_ADMIN_PASSWORD
+                valueFrom:
+                    secretKeyRef:
+                      name: postgres-admin-password
+                      key: POSTGRESQL_ADMIN_PASSWORD
+            ### If no persistency is needed, start commenting from here ###
+            volumes:
+            - name: postgresdb
+              persistentVolumeClaim:
+                claimName: postgres-pv-claim
+            ### End commenting here ##
 
 
 - name: create conjur cluster service
