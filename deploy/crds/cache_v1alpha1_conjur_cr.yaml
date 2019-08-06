@@ -14,3 +14,5 @@ spec:
   nginx_image: docker-registry.default.svc:5000/conjur-oss-operator/nginx:conjur-oss-operator
   conjur_account: conjur
   cli_image: cyberark/conjur-cli:5-latest
+  nfs_path: /mnt/sharedfolder
+  nfs_address: 10.32.40.148
