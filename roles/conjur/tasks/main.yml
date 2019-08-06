@@ -1,0 +1,172 @@
+- name: create conjur postgres service
+  k8s:
+    definition:
+      apiVersion: v1
+      kind: Service
+      metadata:
+        name: conjur-postgres
+        namespace: "{{ meta.namespace }}"
+        labels:
+          app: conjur-postgres
+      spec:
+        ports:
+        - port: 5432
+        selector:
+          app: conjur-postgres
+        type: ClusterIP
+
+- name: create conjur postgres database deployment
+  k8s:
+    definition:
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: conjur-postgres
+        namespace: "{{ meta.namespace }}"
+        labels:
+          app: conjur-postgres
+      spec:
+        selector:
+          matchLabels:
+            app: conjur-postgres
+            name: conjur-postgres
+        replicas: 1
+        template:
+          metadata:
+            labels:
+              app: conjur-postgres
+              name: conjur-postgres
+          spec:
+            containers:
+            - image: "{{ postgres_image }}"
+              imagePullPolicy: "{{ image_pull_policy }}"
+              name: postgres
+
+
+- name: create conjur cluster service
+  k8s:
+    definition:
+      apiVersion: v1
+      kind: Service
+      metadata:
+        name: conjur-cluster
+        namespace: "{{ meta.namespace }}"
+        labels:
+          app: conjur-cluster
+      spec:
+        ports:
+        - port: 443
+          name: https
+        selector:
+          app: conjur-cluster
+        type: ClusterIP
+
+- name: create conjur cluster deployment (appliance & nginx)
+  k8s:
+    definition:
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: conjur-cluster
+        namespace: "{{ meta.namespace }}"
+        labels:
+          app: conjur-cluster
+      spec:
+        replicas: 1
+        selector:
+          matchLabels:
+            app: conjur-cluster
+            name: conjur-cluster
+        template:
+          metadata:
+            labels:
+              app: conjur-cluster
+              name: conjur-cluster
+              role: master
+          spec:
+            serviceAccountName: conjur-cluster
+            imagePullSecret:
+            - name: dockerpullsecret
+            containers:
+            - name: conjur
+              image: "{{ conjur_image }}"
+              imagePullPolicy: "{{ image_pull_policy }}"
+              args: ["server", "-p", "3000"]
+              ports:
+              - containerPort: 3000
+                name: conjur
+              livenessProbe:
+                httpGet:
+                  path: /
+                  port: 3000
+                initialDelaySeconds: 30
+                periodSeconds: 10
+              readinessProbe:
+                httpGet:
+                  path: /
+                  port: 3000
+                initialDelaySeconds: 30
+                periodSeconds: 10
+              env:
+                - name: CONJUR_DATA_KEY
+                  value: "{{ conjur_data_key }}"
+                - name: DATABASE_URL
+                  value: postgres://postgres@conjur-postgres/postgres
+                - name: CONJUR_AUTHENTICATORS
+                  value: authn-k8s/openshift-test,authn
+                - name: CONJUR_ACCOUNT
+                  value: "{{ conjur_account }}"
+            - name: nginx
+              image: "{{ nginx_image }}"
+              imagePullPolicy: "{{ image_pull_policy }}"
+              command: ["nginx"]
+              args: ["-g", "daemon off;"]
+              ports:
+              - containerPort: 443
+                name: https
+              livenessProbe:
+                httpGet:
+                  path: /
+                  scheme: HTTPS
+                  port: https
+                initialDelaySeconds: 30
+                periodSeconds: 10
+              readinessProbe:
+                httpGet:
+                  path: /
+                  scheme: HTTPS
+                  port: https
+                initialDelaySeconds: 30
+                periodSeconds: 10
+
+- name: create conjur cli deployment
+  k8s:
+    definition:
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: conjur-cli
+        namespace: "{{ meta.namespace }}"
+        labels:
+          app: conjur-cli
+      spec:
+        replicas: 1
+        selector:
+          matchLabels:
+            app: conjur-cli
+        template:
+          metadata:
+            name: conjur-cli
+            labels:
+              app: conjur-cli
+          spec:
+            serviceAccountName: default
+            containers:
+            - name: conjur-cli
+              image: "{{ cli_image }}"
+              imagePullPolicy: "{{ image_pull_policy }}"
+              command: ["sleep"]
+              args: ["infinity"]
+
+
+

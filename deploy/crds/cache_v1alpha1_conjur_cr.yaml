@@ -1,0 +1,16 @@
+apiVersion: cache.example.com/v1alpha1
+kind: Conjur
+metadata:
+  name: example-conjur
+spec:
+  size: 1
+  conjur_service_account_name: conjur-cluster
+  conjur_data_key: jh/byMvacf+lmK1MzDdx5kSxbB2454pXOKngaLVAIL4=
+  conjur_postgres_password: 6LpIz6IPeOyB9AQm/QTIfQ==
+  conjur_postgres_url: cG9zdGdyZXM6Ly9wb3N0Z3Jlczo2THBJejZJUGVPeUI5QVFtL1FUSWZRPT1AY29uanVyLXBvc3RncmVzL3Bvc3RncmVz
+  postgres_image: postgres:10.1
+  image_pull_policy: Never
+  conjur_image: docker-registry.default.svc:5000/conjur-oss-operator/conjur:conjur-oss-operator
+  nginx_image: docker-registry.default.svc:5000/conjur-oss-operator/nginx:conjur-oss-operator
+  conjur_account: conjur
+  cli_image: cyberark/conjur-cli:5-latest
